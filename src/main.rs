@@ -3,6 +3,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{self, Read, Seek, Write},
 };
+
 fn main() {
     let mut status = String::new();
 
