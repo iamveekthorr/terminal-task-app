@@ -131,6 +131,15 @@ fn create_json_data(file_content: String) -> Result<Value, Result<String, io::Er
     Ok(json_data)
 }
 
+fn reset_file(task_file: &mut fs::File) -> Result<(), io::Error> {
+    task_file.seek(io::SeekFrom::Start(0))?;
+    task_file.set_len(0)?;
+    task_file.flush()?;
+
+    //  return nothing
+    Ok(())
+}
+
 impl TaskTrait for Task {
     fn update(&self, id: u32, description: Option<String>) -> Task {
         let mut task = Task {
@@ -228,9 +237,7 @@ impl TaskTrait for Task {
 
         // Reset file
         // use optional to exit on error
-        task_file.seek(io::SeekFrom::Start(0))?;
-        task_file.set_len(0)?;
-        task_file.flush()?;
+        reset_file(&mut task_file)?;
 
         // write back to file
         match task_file.write_all(data.as_bytes()) {
