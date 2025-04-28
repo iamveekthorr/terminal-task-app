@@ -21,8 +21,17 @@ fn main() {
         None => panic!("Invalid task status"),
     };
 
-    let task = Task::new(1, String::from("test task"), task_status, None);
+    println!("Enter task name: ");
+    let mut task_name = String::new();
 
+    match io::stdin().read_line(&mut task_name) {
+        Ok(task_name) => task_name,
+        Err(_) => panic!("Failed to read line"),
+    };
+
+    let task_id: u32 = 1;
+
+    let task = Task::new(task_id, task_name, task_status);
     println!("{}", task.status.to_string())
 }
 
@@ -58,27 +67,23 @@ impl TaskStatus {
     }
 }
 
-type TaskNote = Option<String>;
-
 #[derive(Debug)]
 struct Task {
     id: u32,
-    name: String,
+    description: String,
     status: TaskStatus,
-    note: TaskNote,
 }
 
 trait TaskTrait {
-    fn new(id: u32, name: String, status: TaskStatus, note: TaskNote) -> Task;
+    fn new(id: u32, description: String, status: TaskStatus) -> Task;
 }
 
 impl TaskTrait for Task {
-    fn new(id: u32, name: String, status: TaskStatus, note: TaskNote) -> Task {
+    fn new(id: u32, description: String, status: TaskStatus) -> Task {
         Task {
             id,
-            name,
+            description,
             status,
-            note,
         }
     }
 }
