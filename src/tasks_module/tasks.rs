@@ -91,22 +91,17 @@ impl TaskTrait for Task {
             Err(_) => return None,
         };
 
-        // loop through and find the task with the id
-        for task in tasks {
-            let task_id = match task.get("id") {
-                Some(id) => match id.as_u64() {
-                    Some(id) => id,
-                    None => return None,
-                },
-                None => return None,
-            };
+        // return when there's no task
+        if tasks.is_empty() {
+            return None;
+        }
 
-            // reference the original copy
-            if task_id == *id as u64 {
-                return match serde_json::from_value::<Task>(task.clone()) {
-                    Ok(task) => Some(task),
-                    _ => return None,
-                };
+        // loop through and find the task with the id
+        for task_value in tasks {
+            if let Ok(task) = serde_json::from_value::<Task>(task_value) {
+                if task.id == *id {
+                    return Some(task);
+                }
             }
         }
 
@@ -135,25 +130,12 @@ impl TaskTrait for Task {
             Err(e) => return Err(e),
         };
 
-        let new_task = match serde_json::to_value(&self) {
-            Ok(value) => value,
-            Err(e) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Error parsing JSON: {}", e),
-                ));
-            }
-        };
+        let new_task = serde_json::to_value(&self)?;
 
-        match json_data["tasks"].as_array_mut() {
-            Some(tasks) => tasks.push(new_task),
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "tasks is not an array",
-                ));
-            }
-        };
+        json_data["tasks"]
+            .as_array_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "tasks is not an array"))?
+            .push(new_task);
 
         write_json_to_file(&mut task_file, &json_data)?;
 

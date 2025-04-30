@@ -76,7 +76,11 @@ impl App {
                 let updated = task
                     .update(&id, &Some(description))
                     .map_err(|_| "Error updating task")?;
-                println!("Task updated: {:?}", updated);
+
+                let updated =
+                    serde_json::to_string_pretty(&updated).map_err(|_| "Error serializing JSON")?;
+
+                println!("Task updated: {}", updated);
             }
             CommandRequest::Delete { id } => {
                 // TODO: implement Task::delete
