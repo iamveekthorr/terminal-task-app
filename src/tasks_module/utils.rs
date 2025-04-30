@@ -5,7 +5,7 @@ use std::{
     io::{self, Seek, Write},
 };
 
-pub fn create_json_data(file_content: String) -> Result<Value, io::Error> {
+pub fn create_json_data(file_content: &String) -> Result<Value, io::Error> {
     let json_data: Value = if file_content.trim().is_empty() {
         let json_string = json!({
             "tasks": []
@@ -34,13 +34,32 @@ pub fn create_json_data(file_content: String) -> Result<Value, io::Error> {
     Ok(json_data)
 }
 
-pub fn reset_file(task_file: &mut fs::File) -> Result<(), io::Error> {
-    task_file.seek(io::SeekFrom::Start(0))?;
-    task_file.set_len(0)?;
-    task_file.flush()?;
+fn reset_file(task_file: &mut fs::File) -> Result<(), io::Error> {
+    task_file
+        .seek(io::SeekFrom::Start(0))
+        .and_then(|_| task_file.set_len(0))
+        .and_then(|_| task_file.flush())
+}
 
-    //  return nothing
-    Ok(())
+pub fn write_json_to_file(
+    file: &mut fs::File,
+    json_data: &serde_json::Value,
+) -> Result<(), io::Error> {
+    let data = convert_to_json_string(json_data)?;
+
+    reset_file(file)?;
+
+    file.write_all(data.as_bytes())
+}
+
+pub fn convert_to_json_string(json_data: &Value) -> Result<String, io::Error> {
+    let data = serde_json::to_string_pretty(json_data).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Error serializing JSON: {}", e),
+        )
+    })?;
+    Ok(data)
 }
 
 pub fn _print_type_of<T>(_: &T) {
