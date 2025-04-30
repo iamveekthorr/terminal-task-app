@@ -1,23 +1,31 @@
 use super::tasks_definitions::{Task, TaskTrait};
-use super::utils::{create_json_data, open_file, reset_file};
+use super::utils::{create_json_data, open_file, write_json_to_file};
+
 use serde_json::Value;
+
 use std::{
     fs::{self},
-    io::{self, Read, Write},
+    io::{self, Read},
 };
 
 impl Task {
-    pub fn new(id: u32, description: String) -> Self {
+    pub fn new() -> Self {
+        //  Create ID
+        let id = match next_id() {
+            Some(i) => i,
+            _ => 0,
+        };
+
         Task {
             id,
-            description,
+            description: String::new(),
             status: None,
         }
     }
 }
 
 impl TaskTrait for Task {
-    fn update(id: &u32, description: Option<String>) -> Result<Task, io::Error> {
+    fn update(&self, id: &u32, description: &Option<String>) -> Result<Task, io::Error> {
         // get the task by id
         let mut task = match Self::get(id) {
             Some(res) => res,
@@ -30,41 +38,60 @@ impl TaskTrait for Task {
         };
 
         task.description = match description {
-            Some(desc) => desc,
-            None => task.description, // take the old description if none is provided
+            Some(desc) => desc.to_string(), // call to string to take ownership of the string data.
+            None => task.description,       // take the old description if none is provided
         };
 
         task.status = match task.status {
             Some(status) => Some(status),
-            None => None,
+            None => task.status, // use the old status if none is provided
         };
 
+        // write to the file using the new data and save it.
+        let mut file = open_file()?;
+
+        let mut file_content = String::new();
+        file.read_to_string(&mut file_content)?;
+
+        let mut json_data = create_json_data(&file_content)?;
+
+        match json_data["tasks"].as_array_mut() {
+            Some(tasks) => {
+                for task_value in tasks.iter_mut() {
+                    // compare task id to the id of the task in the file
+                    if task_value.get("id").and_then(|v| v.as_u64()) == Some(task.id as u64) {
+                        *task_value = serde_json::to_value(&task).map_err(|e| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("Failed to serialize task: {}", e),
+                            )
+                        })?;
+                        break;
+                    }
+                }
+            }
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "tasks is not an array",
+                ));
+            }
+        }
+
+        write_json_to_file(&mut file, &json_data)?;
+
+        // return the task
         Ok(task)
     }
 
     fn get(id: &u32) -> Option<Task> {
-        let mut task_file = match open_file() {
-            Ok(res) => res,
-            _ => return None,
+        // get all tasks
+        let tasks = match get_tasks() {
+            Ok(value) => value,
+            Err(_) => return None,
         };
 
-        let mut file_content = String::new();
-
-        match task_file.read_to_string(&mut file_content) {
-            Ok(r) => r,
-            _ => return None,
-        };
-
-        let tasks: Value = match serde_json::from_str(&file_content) {
-            Ok(tasks) => tasks,
-            _ => return None,
-        };
-
-        let tasks = match tasks["tasks"].as_array() {
-            Some(tasks) => tasks,
-            None => return None,
-        };
-
+        // loop through and find the task with the id
         for task in tasks {
             let task_id = match task.get("id") {
                 Some(id) => match id.as_u64() {
@@ -86,7 +113,7 @@ impl TaskTrait for Task {
         None
     }
 
-    fn create(&self) -> Result<String, io::Error> {
+    fn create(&self) -> Result<&'static str, io::Error> {
         let file: Result<fs::File, io::Error> = open_file();
 
         let mut task_file = match file {
@@ -103,12 +130,12 @@ impl TaskTrait for Task {
             }
         };
 
-        let mut json_data = match create_json_data(file_content) {
+        let mut json_data = match create_json_data(&file_content) {
             Ok(value) => value,
             Err(e) => return Err(e),
         };
 
-        let new_task = match serde_json::to_value(self) {
+        let new_task = match serde_json::to_value(&self) {
             Ok(value) => value,
             Err(e) => {
                 return Err(io::Error::new(
@@ -128,26 +155,61 @@ impl TaskTrait for Task {
             }
         };
 
-        let data = match serde_json::to_string_pretty(&json_data) {
-            Ok(json) => json,
-            Err(e) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Error parsing JSON: {}", e),
-                ));
-            }
-        };
+        write_json_to_file(&mut task_file, &json_data)?;
 
-        // Reset file
-        // use optional to exit on error
-        reset_file(&mut task_file)?;
+        Ok("Task created successfully")
+    }
 
-        // write back to file
-        match task_file.write_all(data.as_bytes()) {
-            Ok(_) => Ok(String::from("Task created Successfully")),
+    fn list(&self) -> Result<Vec<Value>, io::Error> {
+        match get_tasks() {
+            Ok(value) => Ok(value),
             Err(e) => return Err(e),
         }
     }
-
     // fn delete(&self, task: &mut Task) -> Task {}
+}
+
+fn get_tasks() -> Result<Vec<Value>, io::Error> {
+    let mut task_file = open_file()?;
+
+    let mut file_content = String::new();
+    task_file.read_to_string(&mut file_content)?;
+
+    let tasks: Value = serde_json::from_str(&file_content)?;
+
+    let tasks: Vec<Value> = match tasks["tasks"].as_array().map(|arr| arr.to_vec()) {
+        Some(tasks) => tasks,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "tasks is not an array",
+            ))
+        }
+    };
+
+    Ok(tasks)
+}
+
+fn next_id() -> Option<u32> {
+    let tasks = match get_tasks() {
+        Err(_) => return None,
+        Ok(res) => res,
+    };
+
+    let ids = match tasks
+        .iter()
+        .map(|task| match task.get("id") {
+            Some(id) => match id.as_u64() {
+                Some(id) => id,
+                _ => 0,
+            },
+            _ => 0,
+        })
+        .max()
+    {
+        Some(id) => id,
+        _ => 0,
+    };
+
+    Some(ids as u32 + 1)
 }

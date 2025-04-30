@@ -1,3 +1,4 @@
+use serde_json::Value;
 use std::io::{self};
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -29,10 +30,11 @@ impl TaskStatus {
 }
 
 pub trait TaskTrait {
-    fn update(id: &u32, description: Option<String>) -> Result<Task, io::Error>;
+    fn update(&self, d: &u32, description: &Option<String>) -> Result<Task, io::Error>;
     // fn delete(&self, task: &mut Task) -> Task;
     fn get(id: &u32) -> Option<Task>;
-    fn create(&self) -> Result<String, io::Error>;
+    fn create(&self) -> Result<&'static str, io::Error>;
+    fn list(&self) -> Result<Vec<Value>, io::Error>;
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
