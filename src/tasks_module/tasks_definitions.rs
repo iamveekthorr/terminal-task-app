@@ -34,6 +34,7 @@ pub trait TaskTrait {
     // fn delete(&self, task: &mut Task) -> Task;
     fn get(id: &u32) -> Option<Task>;
     fn create(&self) -> Result<&'static str, io::Error>;
+    fn delete(&self, id: &u32) -> Result<&'static str, io::Error>;
     fn list(&self) -> Result<Vec<Value>, io::Error>;
 }
 
