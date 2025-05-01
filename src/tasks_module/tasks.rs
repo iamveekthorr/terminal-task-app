@@ -55,26 +55,23 @@ impl TaskTrait for Task {
 
         let mut json_data = create_json_data(&file_content)?;
 
-        match json_data["tasks"].as_array_mut() {
-            Some(tasks) => {
-                for task_value in tasks.iter_mut() {
-                    // compare task id to the id of the task in the file
-                    if task_value.get("id").and_then(|v| v.as_u64()) == Some(task.id as u64) {
-                        *task_value = serde_json::to_value(&task).map_err(|e| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("Failed to serialize task: {}", e),
-                            )
-                        })?;
-                        break;
-                    }
-                }
-            }
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "tasks is not an array",
-                ));
+        let tasks_array = json_data["tasks"]
+            .as_array_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "tasks is not an array"))?;
+
+        for task_value in tasks_array.iter_mut() {
+            // If .and_then() returns None, the condition will be false
+            // since None == Some is false.
+            if task_value.get("id").and_then(|v| v.as_u64()) == Some(task.id as u64) {
+                // Update the task value with the new task data by dereferencing the task_value
+                // this will make sure that it mutates the original value
+                *task_value = serde_json::to_value(&task).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Failed to serialize task: {}", e),
+                    )
+                })?;
+                break;
             }
         }
 
@@ -148,6 +145,37 @@ impl TaskTrait for Task {
             Err(e) => return Err(e),
         }
     }
+    fn delete(&self, id: &u32) -> Result<&'static str, io::Error> {
+        let mut file = open_file()?;
+
+        let mut file_content = String::new();
+        file.read_to_string(&mut file_content)?;
+
+        let mut json_data = create_json_data(&file_content)?;
+
+        let tasks_array = json_data["tasks"]
+            .as_array_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "tasks is not an array"))?;
+
+        // find the index of the task to delete
+        let index = match tasks_array
+            .iter()
+            .position(|value| value.get("id").and_then(|v| v.as_u64()) == Some(*id as u64))
+        {
+            Some(index) => index,
+            _ => return Err(io::Error::new(io::ErrorKind::NotFound, "Task not found")),
+        };
+
+        tasks_array.remove(index);
+
+        let json_string = serde_json::to_string_pretty(&tasks_array)?;
+
+        write_json_to_file(&mut file, &json_data)?;
+
+        println!("Tasks array after deletion: {}", json_string);
+
+        Ok("Task deleted successfully")
+    }
     // fn delete(&self, task: &mut Task) -> Task {}
 }
 
@@ -159,15 +187,10 @@ fn get_tasks() -> Result<Vec<Value>, io::Error> {
 
     let tasks: Value = serde_json::from_str(&file_content)?;
 
-    let tasks: Vec<Value> = match tasks["tasks"].as_array().map(|arr| arr.to_vec()) {
-        Some(tasks) => tasks,
-        None => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "tasks is not an array",
-            ))
-        }
-    };
+    let tasks: Vec<Value> = tasks["tasks"]
+        .as_array()
+        .map(|arr| arr.to_vec())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "tasks is not an array"))?;
 
     Ok(tasks)
 }

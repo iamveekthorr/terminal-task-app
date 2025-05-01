@@ -83,8 +83,7 @@ impl App {
                 println!("Task updated: {}", updated);
             }
             CommandRequest::Delete { id } => {
-                // TODO: implement Task::delete
-                println!("(Simulating) Task {} deleted", id);
+                task.delete(&id).map_err(|_| "Error Deleting Task")?;
             }
             CommandRequest::List => {
                 let tasks = task.list().map_err(|_| "Something happened")?;
