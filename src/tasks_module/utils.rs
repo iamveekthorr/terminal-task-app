@@ -78,3 +78,13 @@ pub fn open_file() -> Result<fs::File, io::Error> {
         Err(e) => Err(e),
     }
 }
+
+pub fn setup_test_file(content: &str) -> std::io::Result<()> {
+    let mut file = fs::File::create("test_tasks.json")?;
+    file.write_all(content.as_bytes())?;
+    Ok(())
+}
+
+pub fn cleanup_test_file() {
+    let _ = fs::remove_file("test_tasks.json");
+}

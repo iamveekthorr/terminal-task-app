@@ -1,10 +1,10 @@
 use serde_json::Value;
 use std::io::{self};
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum TaskStatus {
-    PENDING,
-    COMPLETED,
+    Pending,
+    Done,
     InPROGRESS,
 }
 
@@ -13,16 +13,16 @@ impl TaskStatus {
     // to return a string representation of the enum
     pub fn to_string(&self) -> String {
         match self {
-            TaskStatus::PENDING => String::from("Pending"),
-            TaskStatus::COMPLETED => String::from("Completed"),
-            TaskStatus::InPROGRESS => String::from("In Progress"),
+            TaskStatus::Pending => String::from("pending"),
+            TaskStatus::Done => String::from("done"),
+            TaskStatus::InPROGRESS => String::from("in progress"),
         }
     }
 
     pub fn from(status: &str) -> Option<Self> {
-        match status {
-            "todo" | "pending" => Some(TaskStatus::PENDING),
-            "done" | "completed" => Some(TaskStatus::COMPLETED),
+        match status.to_lowercase().as_str() {
+            "todo" | "pending" => Some(TaskStatus::Pending),
+            "done" | "completed" => Some(TaskStatus::Done),
             "in-progress" | "in progress" | "in_progress" => Some(TaskStatus::InPROGRESS),
             _ => None,
         }
@@ -31,11 +31,10 @@ impl TaskStatus {
 
 pub trait TaskTrait {
     fn update(&self, id: &u32, description: &Option<String>) -> Result<Task, io::Error>;
-    // fn delete(&self, task: &mut Task) -> Task;
     fn get(id: &u32) -> Option<Task>;
     fn create(&self) -> Result<&'static str, io::Error>;
     fn delete(&self, id: &u32) -> Result<&'static str, io::Error>;
-    fn list(&self) -> Result<Vec<Value>, io::Error>;
+    fn list(&self, status: Option<&TaskStatus>) -> Result<Vec<Value>, io::Error>;
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]

@@ -1,5 +1,5 @@
 pub use crate::tasks_module::tasks;
-use crate::tasks_module::tasks_definitions::{Task, TaskTrait};
+use crate::tasks_module::tasks_definitions::{Task, TaskStatus, TaskTrait};
 
 pub struct App {
     pub command: String,
@@ -29,7 +29,7 @@ enum CommandRequest {
     Create { description: String },
     Update { id: u32, description: String },
     Delete { id: u32 },
-    List,
+    List { status: Option<String> },
 }
 
 fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandRequest, &'static str> {
@@ -56,7 +56,11 @@ fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandReques
             let id = id_str.parse().map_err(|_| "Invalid task ID")?;
             Ok(CommandRequest::Delete { id })
         }
-        Ok(Command::LIST) => Ok(CommandRequest::List),
+        Ok(Command::LIST) => {
+            let status = args.next();
+            // let status = TaskStatus::from(status);
+            Ok(CommandRequest::List { status })
+        }
         _ => Err("Unknown or missing command"),
     }
 }
@@ -85,8 +89,12 @@ impl App {
             CommandRequest::Delete { id } => {
                 task.delete(&id).map_err(|_| "Error Deleting Task")?;
             }
-            CommandRequest::List => {
-                let tasks = task.list().map_err(|_| "Something happened")?;
+            CommandRequest::List { status } => {
+                let task_status = status.as_deref().and_then(TaskStatus::from);
+
+                let tasks = task
+                    .list(task_status.as_ref())
+                    .map_err(|_| "Something happened")?;
 
                 // convert to json string for easy printing
                 let tasks =
