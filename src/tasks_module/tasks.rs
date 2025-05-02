@@ -1,4 +1,4 @@
-use super::tasks_definitions::{Task, TaskTrait};
+use super::tasks_definitions::{Task, TaskStatus, TaskTrait};
 use super::utils::{create_json_data, open_file, write_json_to_file};
 
 use serde_json::Value;
@@ -40,11 +40,6 @@ impl TaskTrait for Task {
         task.description = match description {
             Some(desc) => desc.to_string(), // call to string to take ownership of the string data.
             None => task.description,       // take the old description if none is provided
-        };
-
-        task.status = match task.status {
-            Some(status) => Some(status),
-            None => task.status, // use the old status if none is provided
         };
 
         // write to the file using the new data and save it.
@@ -139,12 +134,13 @@ impl TaskTrait for Task {
         Ok("Task created successfully")
     }
 
-    fn list(&self) -> Result<Vec<Value>, io::Error> {
-        match get_tasks() {
-            Ok(value) => Ok(value),
-            Err(e) => return Err(e),
+    fn list(&self, status: Option<&TaskStatus>) -> Result<Vec<Value>, io::Error> {
+        match status {
+            Some(status) => sort_by_status(status), // only run with status if there is status
+            None => get_tasks(),
         }
     }
+
     fn delete(&self, id: &u32) -> Result<&'static str, io::Error> {
         let mut file = open_file()?;
 
@@ -217,4 +213,13 @@ fn next_id() -> Option<u32> {
     };
 
     Some(ids as u32 + 1)
+}
+
+fn sort_by_status(status: &TaskStatus) -> Result<Vec<Value>, io::Error> {
+    let tasks = get_tasks()?
+        .into_iter()
+        .filter(|task| task["status"] == status.to_string().to_lowercase())
+        .collect::<Vec<Value>>();
+
+    Ok(tasks)
 }
