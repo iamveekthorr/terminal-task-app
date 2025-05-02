@@ -11,6 +11,8 @@ enum Command {
     UPDATE,
     DELETE,
     LIST,
+    MarkDone,
+    MarkInProgress,
 }
 
 impl Command {
@@ -20,6 +22,8 @@ impl Command {
             "update" => Ok(Command::UPDATE),
             "delete" => Ok(Command::DELETE),
             "list" => Ok(Command::LIST),
+            "mark-done" => Ok(Command::MarkDone),
+            "mark-in-progress" => Ok(Command::MarkInProgress),
             _ => Err("Invalid command"),
         }
     }
@@ -30,6 +34,8 @@ enum CommandRequest {
     Update { id: u32, description: String },
     Delete { id: u32 },
     List { status: Option<String> },
+    MarkDone { id: u32 },
+    MarkInProgress { id: u32 },
 }
 
 fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandRequest, &'static str> {
@@ -61,6 +67,16 @@ fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandReques
             // let status = TaskStatus::from(status);
             Ok(CommandRequest::List { status })
         }
+        Ok(Command::MarkDone) => {
+            let id_str = args.next().ok_or("Missing task ID")?;
+            let id = id_str.parse().map_err(|_| "Invalid task ID")?;
+            Ok(CommandRequest::MarkDone { id })
+        }
+        Ok(Command::MarkInProgress) => {
+            let id_str = args.next().ok_or("Missing task ID")?;
+            let id = id_str.parse().map_err(|_| "Invalid task ID")?;
+            Ok(CommandRequest::MarkInProgress { id })
+        }
         _ => Err("Unknown or missing command"),
     }
 }
@@ -68,7 +84,7 @@ fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandReques
 impl App {
     pub fn run(args: impl Iterator<Item = String>) -> Result<(), &'static str> {
         let request = parse_command(args)?;
-        let mut task = Task::new(); // replace 1 with dynamic id later
+        let mut task = Task::new();
 
         match request {
             CommandRequest::Create { description } => {
@@ -101,6 +117,14 @@ impl App {
                     serde_json::to_string_pretty(&tasks).map_err(|_| "Error serializing JSON")?;
 
                 println!("{}", tasks);
+            }
+            CommandRequest::MarkDone { id } => {
+                task.update_task_as_done(&id)
+                    .map_err(|_| "Error updating task")?;
+            }
+            CommandRequest::MarkInProgress { id } => {
+                task.update_task_as_in_progress(&id)
+                    .map_err(|_| "Error updating task")?;
             }
         }
 

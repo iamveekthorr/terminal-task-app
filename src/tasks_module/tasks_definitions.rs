@@ -2,9 +2,11 @@ use serde_json::Value;
 use std::io::{self};
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
     Pending,
     Done,
+    #[serde(rename = "in-progress")]
     InPROGRESS,
 }
 
@@ -15,7 +17,7 @@ impl TaskStatus {
         match self {
             TaskStatus::Pending => String::from("pending"),
             TaskStatus::Done => String::from("done"),
-            TaskStatus::InPROGRESS => String::from("in progress"),
+            TaskStatus::InPROGRESS => String::from("in-progress"),
         }
     }
 
@@ -35,6 +37,8 @@ pub trait TaskTrait {
     fn create(&self) -> Result<&'static str, io::Error>;
     fn delete(&self, id: &u32) -> Result<&'static str, io::Error>;
     fn list(&self, status: Option<&TaskStatus>) -> Result<Vec<Value>, io::Error>;
+    fn update_task_as_done(&self, id: &u32) -> Result<&'static str, io::Error>;
+    fn update_task_as_in_progress(&self, id: &u32) -> Result<&'static str, io::Error>;
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
