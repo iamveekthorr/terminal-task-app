@@ -19,7 +19,7 @@ impl Task {
         Task {
             id,
             description: String::new(),
-            status: None,
+            status: Some(TaskStatus::Pending), // every new task should be marked as pending
         }
     }
 }
@@ -27,53 +27,24 @@ impl Task {
 impl TaskTrait for Task {
     fn update(&self, id: &u32, description: &Option<String>) -> Result<Task, io::Error> {
         // get the task by id
-        let mut task = match Self::get(id) {
-            Some(res) => res,
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("Cannot find task with id {}", id,),
-                ))
-            }
-        };
+        if let Some(mut task) = Self::get(id) {
+            task.description = match description {
+                Some(desc) => desc.to_string(), // call to string to take ownership of the string data.
+                None => task.description,       // take the old description if none is provided
+            };
 
-        task.description = match description {
-            Some(desc) => desc.to_string(), // call to string to take ownership of the string data.
-            None => task.description,       // take the old description if none is provided
-        };
+            let (mut file, json_data) = replace_task_in_file(&task)?;
 
-        // write to the file using the new data and save it.
-        let mut file = open_file()?;
+            write_json_to_file(&mut file, &json_data)?;
 
-        let mut file_content = String::new();
-        file.read_to_string(&mut file_content)?;
-
-        let mut json_data = create_json_data(&file_content)?;
-
-        let tasks_array = json_data["tasks"]
-            .as_array_mut()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "tasks is not an array"))?;
-
-        for task_value in tasks_array.iter_mut() {
-            // If .and_then() returns None, the condition will be false
-            // since None == Some is false.
-            if task_value.get("id").and_then(|v| v.as_u64()) == Some(task.id as u64) {
-                // Update the task value with the new task data by dereferencing the task_value
-                // this will make sure that it mutates the original value
-                *task_value = serde_json::to_value(&task).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Failed to serialize task: {}", e),
-                    )
-                })?;
-                break;
-            }
+            // return the task
+            Ok(task)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "tasks is not an array",
+            ))
         }
-
-        write_json_to_file(&mut file, &json_data)?;
-
-        // return the task
-        Ok(task)
     }
 
     fn get(id: &u32) -> Option<Task> {
@@ -172,7 +143,74 @@ impl TaskTrait for Task {
 
         Ok("Task deleted successfully")
     }
-    // fn delete(&self, task: &mut Task) -> Task {}
+
+    fn update_task_as_done(&self, id: &u32) -> Result<&'static str, io::Error> {
+        // 1) find the task
+        if let Some(mut task) = Self::get(id) {
+            // update as done
+            task.status = Some(TaskStatus::Done);
+
+            let (mut file, json_data) = replace_task_in_file(&task)?;
+
+            write_json_to_file(&mut file, &json_data)?;
+
+            // send success message
+            Ok("Task Updated Successfully")
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "tasks is not an array",
+            ))
+        }
+    }
+
+    fn update_task_as_in_progress(&self, id: &u32) -> Result<&'static str, io::Error> {
+        // 1) find the task
+        if let Some(mut task) = Self::get(id) {
+            // update as in-progress
+            task.status = Some(TaskStatus::InPROGRESS);
+
+            let (mut file, json_data) = replace_task_in_file(&task)?;
+
+            write_json_to_file(&mut file, &json_data)?;
+
+            // send success message
+            Ok("Task Updated Successfully")
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "tasks is not an array",
+            ))
+        }
+    }
+}
+
+fn replace_task_in_file(task: &Task) -> Result<(fs::File, Value), io::Error> {
+    let mut file = open_file()?;
+    let mut file_content = String::new();
+
+    file.read_to_string(&mut file_content)?;
+    let mut json_data = create_json_data(&file_content)?;
+
+    let tasks_array = json_data["tasks"]
+        .as_array_mut()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "tasks is not an array"))?;
+
+    for task_value in tasks_array.iter_mut() {
+        if task_value.get("id").and_then(|v| v.as_u64()) == Some(task.id as u64) {
+            // dereference task_value to mutate original value
+            // deserialize value to become JSON<Task> object
+            *task_value = serde_json::to_value(&task).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Serialization error: {}", e),
+                )
+            })?;
+            break;
+        }
+    }
+
+    Ok((file, json_data))
 }
 
 fn get_tasks() -> Result<Vec<Value>, io::Error> {
